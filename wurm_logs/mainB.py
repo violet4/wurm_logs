@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, UniqueConstraint
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, select
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Mapped
 from sqlalchemy import create_engine
 import datetime
 
@@ -65,6 +65,7 @@ class LogActions(LogMessage):
 
 
 engine = create_engine('sqlite:///db.sqlite3', echo=False)
+Session = sessionmaker(bind=engine)
 
 
 def create_tables():
@@ -72,31 +73,58 @@ def create_tables():
 
 
 def create_example_data():
-    Session = sessionmaker(bind=engine)
     session = Session()
 
-    # Get or create users
+    usernames = [
+        'john_doe',
+        'jane_smith',
+    ]
+    for username in usernames:
+        result = session.query(User).where(User.username==username).one_or_none()
+        if not result:
+            user = User(username=username)
+            session.add(user)
     user1 = session.execute(select(User).where(User.username == 'john_doe')).scalar_one_or_none()
-    if not user1:
-        user1 = User(username='john_doe')
-        session.add(user1)
 
-    user2 = session.execute(select(User).where(User.username == 'jane_smith')).scalar_one_or_none()
-    if not user2:
-        user2 = User(username='jane_smith')
-        session.add(user2)
-
-    # Get or create date
-    today = datetime.date.today()
-    date1 = session.execute(select(Date).where(Date.year == today.year, Date.month == today.month, Date.day == today.day)).scalar_one_or_none()
+    now = datetime.datetime.now()
+    date1 = session.query(Date).where(Date.year == now.year, Date.month == now.month, Date.day == now.day).one_or_none()
     if not date1:
-        date1 = Date(year=today.year, month=today.month, day=today.day)
+        date1 = Date(year=now.year, month=now.month, day=now.day)
         session.add(date1)
 
-    # Get or create log type
-    log_type1 = session.execute(select(LogType).where(LogType.message == 'You start {action}.')).scalar_one_or_none()
+    log_type1 = session.query(LogType).filter_by(message='You start {action}.').first()
     if not log_type1:
         log_type1 = LogType(message='You start {action}.')
         session.add(log_type1)
 
-    # ... (The rest remains similar)
+    log_message1 = LogActions(
+        user=user1,
+        date=date1,
+        log_type=log_type1,
+        hour=now.hour,
+        minute=now.minute,
+        second=now.second,
+        action="to dig",
+    )
+    session.add(log_message1)
+
+    session.commit()
+
+
+def reconstruct_messages():
+    session = Session()
+
+    log_message: LogMessage
+    for log_message in session.query(LogMessage).join(LogActions).filter(LogMessage.log_type_name=='action'):
+        full_message = log_message.log_type.message.format(action=log_message.action)
+        print(f"{log_message.user.username} - {log_message.date} {log_message.hour:02d}:{log_message.minute:02d}:{log_message.second:02d} - {full_message}")
+
+
+def main():
+    create_tables()
+    create_example_data()
+    reconstruct_messages()
+
+
+if __name__ == '__main__':
+    main()
