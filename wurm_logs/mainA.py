@@ -47,9 +47,10 @@ class LogMessage(Base):
     log_type = relationship("LogType")
 
     __mapper_args__ = {
+        'polymorphic_on': log_type_name,
         'polymorphic_identity': 'log_message',
-        'polymorphic_on': log_type_name
     }
+
 
 
 class LogActions(LogMessage):
@@ -70,9 +71,9 @@ engine = create_engine('sqlite:///db.sqlite3', echo=False)
 def create_tables():
     Base.metadata.create_all(engine)
 
+Session = sessionmaker(bind=engine)
 
 def create_example_data():
-    Session = sessionmaker(bind=engine)
     session = Session()
 
     # Get or create users
@@ -87,16 +88,50 @@ def create_example_data():
         session.add(user2)
 
     # Get or create date
-    today = datetime.date.today()
+    now = datetime.datetime.now()
     date1 = session.execute(select(Date).where(Date.year == today.year, Date.month == today.month, Date.day == today.day)).scalar_one_or_none()
     if not date1:
-        date1 = Date(year=today.year, month=today.month, day=today.day)
+        date1 = Date(year=now.year, month=now.month, day=now.day)
         session.add(date1)
 
-    # Get or create log type
-    log_type1 = session.execute(select(LogType).where(LogType.message == 'You start {action}.')).scalar_one_or_none()
+    log_type1 = session.query(LogType).filter_by(message='You start {action}.').first()
     if not log_type1:
         log_type1 = LogType(message='You start {action}.')
         session.add(log_type1)
 
-    # ... (The rest remains similar)
+    log_message1 = LogActions(
+        user=user1,
+        date=date1,
+        log_type=log_type1,
+        hour=now.hour,
+        minute=now.minute,
+        second=now.second,
+        action='to dig'
+    )
+    session.add(log_message1)
+
+    session.commit()
+
+
+def reconstruct_messages():
+    session = Session()
+    from sqlalchemy.orm import with_polymorphic
+    # polymorphic_entities = 
+    asdf = with_polymorphic(LogMessage, [LogActions])
+    messages = session.query(asdf)
+    
+    for log_message in messages:    # for log_message in log_messages:
+        if isinstance(log_message, LogActions):  # Checking the type of polymorphic instance
+            action = log_message.action
+            full_message = log_message.log_type.message.format(action=action)
+            print(f"{log_message.user.username} - {log_message.date} {log_message.hour:02d}:{log_message.minute:02d}:{log_message.second:02d} - {full_message}")
+
+
+def main():
+    create_tables()
+    create_example_data()
+    reconstruct_messages()
+
+
+if __name__ == '__main__':
+    main()
