@@ -47,8 +47,8 @@ class LogMessage(Base):
     log_type = relationship("LogType")
 
     __mapper_args__ = {
+        'polymorphic_on': log_type_name,
         'polymorphic_identity': 'log_message',
-        'polymorphic_on': log_type_name
     }
 
 
