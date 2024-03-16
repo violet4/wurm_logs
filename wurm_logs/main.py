@@ -1,7 +1,10 @@
+import datetime
+from enum import IntEnum
+
+
 from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, select
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Mapped
 from sqlalchemy import create_engine
-import datetime
 
 Base = declarative_base()
 
@@ -24,9 +27,22 @@ class Date(Base):
     def __str__(self):
         return f"{self.year}-{self.month:02d}-{self.day:02d}"
 
+from enum import IntEnum
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Mapped
+from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, select
+
+Base = declarative_base()
+
+class LogTypeEnum(IntEnum):
+    # postgres smallserial 	2 bytes 	small autoincrementing integer 	1 to 32767
+    # sqlite - can only represent int? we can't represent it any more efficiently?
+    BASE = 1
+    ACTION = 2
+
 
 class LogType(Base):
     __tablename__ = 'log_type'
+    # this should be a direct mapping to LogTypeEnum such that ID=1 maps to our BASE and ID=2 maps to our ACTION.
     log_type_id = Column(Integer, primary_key=True)
     message = Column(String, unique=True)
 
@@ -40,15 +56,14 @@ class LogMessage(Base):
     hour = Column(Integer)
     minute = Column(Integer)
     second = Column(Integer)
-    log_type_name = Column(String)
 
     user = relationship("User")
     date = relationship("Date")
     log_type = relationship("LogType")
 
     __mapper_args__ = {
-        'polymorphic_on': log_type_name,
-        'polymorphic_identity': 'log_message',
+        'polymorphic_on': log_type_id,
+        'polymorphic_identity': LogTypeEnum.BASE,
     }
 
 
@@ -60,7 +75,7 @@ class LogActions(LogMessage):
     __table_args__ = (UniqueConstraint('log_id', 'action'),)  # Unique action per log_id
 
     __mapper_args__ = {
-        'polymorphic_identity': 'action',
+        'polymorphic_identity': LogTypeEnum.ACTION,
     }
 
 
